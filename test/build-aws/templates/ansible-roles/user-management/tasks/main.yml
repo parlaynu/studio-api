@@ -1,0 +1,89 @@
+## install the needed packages
+
+
+- name: install required packages
+  apt:
+    pkg:
+    - ldap-utils
+    - python3-ldap3
+    - python3-yaml
+    - python3-jinja2
+    state: present
+
+## upload the ca certificate
+
+- name: upload CA certificate
+  copy:
+    src: ca.crt
+    dest: /etc/ldap/certs/
+    owner: root
+    group: root
+    mode: 0644
+    directory_mode: 0755
+
+
+## configure the client
+
+- name: configure TLS client
+  lineinfile: 
+    path: /etc/ldap/ldap.conf
+    regexp: '^TLS_CACERT'
+    line: TLS_CACERT    /etc/ldap/certs/ca.crt
+
+
+## checkout the admin utils
+
+- name: checkout api server code
+  ansible.builtin.git:
+    repo: 'https://github.com/studio1767/admin-utils.git'
+    dest: /srv/studio1767-utils-admin
+    accept_newhostkey: true
+    update: false
+
+- name: fetch the ldap utils config
+  run_once: true
+  fetch:
+    src: /srv/studio1767-utils-admin/configs/ldap.yaml.tpl
+    dest: /tmp/ldap.yaml.tpl
+    flat: true
+
+- name: upload utils config file
+  template:
+    src: /tmp/ldap.yaml.tpl
+    dest: /srv/studio1767-utils-admin/configs/ldap.yaml
+    owner: root
+    group: root
+    mode: 0644
+    variable_start_string: "$${"
+    variable_end_string: "}"
+  vars:
+    ldap_uri: ${ldap_uri}
+    bind_dn: ${bind_dn}
+    bind_pw: "${bind_pw}"
+    root_dn: ${root_dn}
+    start_tls: ${start_tls}
+    ca_cert_file: certs/ca.crt
+
+- name: upload utils ca cert file
+  copy:
+    src: ca.crt
+    dest: /srv/studio1767-utils-admin/configs/certs/ca.crt
+    owner: root
+    group: root
+    mode: 0644
+
+- name: create root config directory
+  file:
+    path: /root/.config/s1767
+    state: directory
+    owner: root
+    group: root
+    mode: '0750'
+
+- name: link the config file
+  file:
+    src: /srv/studio1767-utils-admin/configs
+    dest: /root/.config/s1767/admin
+    owner: root
+    group: root
+    state: link
